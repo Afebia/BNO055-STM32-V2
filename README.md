@@ -1,5 +1,5 @@
 If you want to measure the speed of a car or the angles of a spacecraft, you can easily use the BNO055 sensor.
-Today we created a library for BNO055 to use with STM32. With this library you can configure BNO055 and retrieve data from it.
+Today I created a library for BNO055 to use with STM32. With this library you can configure BNO055 and retrieve data from it.
 
 **WARNING:** This library is written on an STM32F407-DISC1 so its header file is `stm32f4xx_hal.h`. İf you use another board, for example STM32F103C8 BluePill, just change that to `stm32f1xx_hal.h` in our BNO055_STM32.h header file.
 ```c
@@ -76,6 +76,8 @@ void BNO055_Init(void){
 	HAL_Delay(100);
 }
 ```
+And that's all, now we can call these functions in main.c source file.
+
 ### Full example
 ```c
 /* Includes ------------------------------------------------------------------*/
