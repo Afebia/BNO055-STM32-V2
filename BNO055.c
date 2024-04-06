@@ -2,7 +2,7 @@
  * BNO055.c
  *
  *  Created on: Mar 6, 2024
- *      Author: Afebia
+ *      Author: Berat Bayram
  */
 #include "BNO055_STM32.h"
 
@@ -16,10 +16,10 @@ float Accel_z, Gyro_z, Magneto_z, Pitch,   LinAcc_z, Gravity_z;
 void SelectPage(uint8_t page){
 
 	if(HAL_I2C_Mem_Write(&hi2c1, P_BNO055, P_PAGE_ID, 1, &page, 1, HAL_MAX_DELAY) != HAL_OK){
-		printf("Page ayarlanamadi!\n");
+		printf("Register page could not be changed!\n");
 	}
 	else{
-		printf("Page ayarlandi\n");
+		printf("Register page replacement was successful.\n");
 	}
 	HAL_Delay(100);
 }
@@ -37,7 +37,10 @@ void AccelData(void){
 	Accel_y = (float)(SensorData.accel.y /100.0);
 	Accel_z = (float)(SensorData.accel.z /100.0);
 
-
+	printf("Accelerometer Data:\n");
+	printf("Accel_X: %f\t",Accel_x);
+	printf("Accel_Y: %f\t",Accel_y);
+	printf("Accel_Z: %f\t\n",Accel_z);
 }
 
 void MagnetoData(void){
@@ -53,6 +56,10 @@ void MagnetoData(void){
 	Magneto_y = (float)(SensorData.magneto.y /16.0);
 	Magneto_z = (float)(SensorData.magneto.z /16.0);
 
+	printf("Magnetometer Data:\n");
+	printf("Magnet_X: %f\t",Magneto_x);
+	printf("Magnet_Y: %f\t",Magneto_y);
+	printf("Magnet_Z: %f\t\n",Magneto_z);
 }
 
 void GyroData(void){
@@ -68,6 +75,10 @@ void GyroData(void){
 	Gyro_y = (float)((SensorData.gyro.y) /16.0);
 	Gyro_z = (float)((SensorData.gyro.z) /16.0);
 
+	printf("Gyroscope Data:\n");
+	printf("Gyro_X: %f\t",Gyro_x);
+	printf("Gyro_Y: %f\t",Gyro_y);
+	printf("Gyro_Z: %f\t\n",Gyro_z);
 }
 
 void Euler_Angle(void){
@@ -82,6 +93,7 @@ void Euler_Angle(void){
 	Heading = (float)(SensorData.euler.x /16.0);
 	Roll    = (float)(SensorData.euler.y /16.0);
 	Pitch   = (float)(SensorData.euler.z /16.0);
+
 	printf("Euler Angles\n");
 	printf("Heading: %f\t",Heading);
 	printf("Roll: %f\t",Roll);
@@ -102,6 +114,10 @@ void Lineer_Accel(void){
 	LinAcc_y = (float)(SensorData.lineeracc.y /100.0);
 	LinAcc_z = (float)(SensorData.lineeracc.z /100.0);
 
+	printf("Lineer Accel\n");
+	printf("LinAcc_X: %f\t",LinAcc_x);
+	printf("LinAcc_Y: %f\t",LinAcc_y);
+	printf("LinAcc_Z: %f\t\n",LinAcc_z);
 }
 
 void Gravity_Vector(void){
@@ -116,6 +132,11 @@ void Gravity_Vector(void){
 	Gravity_x = (float)(SensorData.gravity.x /100.0);
 	Gravity_y = (float)(SensorData.gravity.y /100.0);
 	Gravity_z = (float)(SensorData.gravity.z /100.0);
+
+	printf("Gravity Vector\n");
+	printf("Gravity_X: %f\t",Gravity_x);
+	printf("Gravity_Y: %f\t",Gravity_y);
+	printf("Gravity_Z: %f\t\n",Gravity_z);
 }
 
 void Status_Calibrated(void){
@@ -145,19 +166,20 @@ void Unit_Select(uint8_t ORI,uint8_t TEMP,uint8_t EUL,uint8_t GYRO, uint8_t ACC)
 
 	uint8_t unit = (ORI | TEMP | EUL | GYRO | ACC);
 	if(HAL_I2C_Mem_Write(&hi2c1, P_BNO055, P_UNIT_SEL, 1, &unit, sizeof(unit), HAL_MAX_DELAY) != HAL_OK){
-		printf("Unit Ayarlanamadi!\n");
+		printf("Unit could not be set!\n");
 	}
 	else{
-		printf("Unit Ayarlandi!\n");
+		printf("Unit setting successful.\n");
 	}
 }
 
 void Set_Operation_Mode(op_modes_t Mode){
 
+	SelectPage(Page_0);
 	if(	HAL_I2C_Mem_Write(&hi2c1, P_BNO055, P_OPR_MODE, 1, &Mode, 1, HAL_MAX_DELAY) !=HAL_OK){
-		printf("Operation Mode Ayarlanamadi\n");
+		printf("Operation mode could not be set!\n");
 	}
-	else printf("Operation Mode Ayarlandi\n");
+	else printf("Operation mode switching succeeded.\n");
 
 	if(Mode == CONFIG_MODE) HAL_Delay(19);
 
@@ -183,11 +205,11 @@ void SetPowerTo_NORMAL(void){
 	uint8_t power_normal = 0x00; // Low power mode 0x1 and Suspend mode 0x2
 	if(	HAL_I2C_Mem_Write(&hi2c1, P_BNO055, P_PWR_MODE, 1, &power_normal, 1, HAL_MAX_DELAY) != HAL_OK)
 	{
-		printf("Power Mode Ayarlanamadi!\n");
+		printf("Power mode could not be set!\n");
 	}
 	else
 	{
-		printf("Power Mode Ayarlandi\n");
+		printf("Power mode switching succeeded.\n");
 	}
 	HAL_Delay(50);
 
@@ -244,8 +266,10 @@ void BNO055_Axis(uint8_t config, uint8_t sign){
 }
 
 void SET_Accel_Range(accel_range_t range){
-	SelectPage(1);
+	SelectPage(Page_1);
 	HAL_I2C_Mem_Write(&hi2c1, P_BNO055, P_ACC_CONFIG, 1, &range, 1, HAL_MAX_DELAY);
+	HAL_Delay(100);
+	SelectPage(Page_0);
 
 }
 
