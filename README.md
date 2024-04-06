@@ -5,7 +5,7 @@ Today I created a library for BNO055 to use with STM32. With this library you ca
 ```c
 #include "stm32f1xx_hal.h
 ```
-**WARNING:** We used the `printf()` function in this library. Therefore, you should activate the printf function. Just google it :)
+**WARNING:** We used the `printf()` function in this library. Therefore, you should activate the printf function. If you don't know how to do that just google it :)
 
 Firstly, you must create a project with CubeMX and activate I2C protocol. Then add the header file `BNO055_STM32..h` into the `../Core/Inc` directory and the `BNO055.c` source file into the `../Core/Src` directory.
 
