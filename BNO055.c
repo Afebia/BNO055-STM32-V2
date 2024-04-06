@@ -2,7 +2,7 @@
  * BNO055.c
  *
  *  Created on: Mar 6, 2024
- *      Author: Berat Bayram
+ *      Author: Afebia
  */
 #include "BNO055_STM32.h"
 
