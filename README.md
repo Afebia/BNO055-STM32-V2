@@ -78,6 +78,9 @@ void BNO055_Init(void){
 ```
 And that's all, now we can call these functions in main.c source file.
 
+![github2](https://github.com/Afebia/BNO055-STM32/assets/121301223/5a1dd1b4-7d8a-45ff-853b-990189a4fa36)
+
+
 ### Full example
 ```c
 /* Includes ------------------------------------------------------------------*/
