@@ -15,9 +15,15 @@ Today I created a library for BNO055 to use with STM32. With this library you ca
 ```
 **WARNING:** We used the `printf()` function in this library. Therefore, you should activate the printf function. If you don't know how to do that just google it :)
 
-Firstly, you must create a project with CubeMX and activate I2C protocol. Then add the header file `BNO055_STM32.h` into the `../Core/Inc` directory and the `BNO055.c` source file into the `../Core/Src` directory.
+Firstly, you must create a project with CubeMX and activate I2C protocol. Then add the header file `BNO055_STM32.h` into the `../Core/Inc` directory and the `BNO055.c` source file into the `../Core/Src` directory. 
 
 ![image](https://github.com/user-attachments/assets/15f21c98-b0fa-40ed-b05a-060b219fff28)
+
+**WARNING:** Change this line in the header file for whichever I2C protocol you have opened. For example hi2c1
+```c
+extern I2C_HandleTypeDef hi2c2;
+#define bno_i2c (hi2c2)
+```
 
 The first thing you need to do before using the library is to change the I2C address in the `BNO055_STM32.h` header file according to the module you are using (it's `0x28` or `0x29`). If you are using Adafruit BNO055 module, this value is 0x28 or if you have designed a pcb and are using a BNO055 chip, this value changes depending on what you connect the COM3 pin of the chip to.
 
