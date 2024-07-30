@@ -5,178 +5,224 @@
  *      Author: Berat Bayram
  */
 #include "BNO055_STM32.h"
+#include <string.h>
 
-bno055_sensors_t SensorData;
+/*!
+ *   @brief  Gets the latest system status info
+ *
+ *   @param  BNO_status_t structure that contains status information
+ *           STresult, SYSError and SYSStatus
+ *
+ *   @retval None
+ */
+void Check_Status(BNO_Status_t *result){
 
-calib_stat_t status;
-float Accel_x, Gyro_x, Magneto_x, Heading, LinAcc_x, Gravity_x;
-float Accel_y, Gyro_y, Magneto_y, Roll,    LinAcc_y, Gravity_y;
-float Accel_z, Gyro_z, Magneto_z, Pitch,   LinAcc_z, Gravity_z;
+	HAL_StatusTypeDef status;
+	uint8_t value;
 
+	  /* Self Test Results
+	     1 = test passed, 0 = test failed
+
+	     Bit 0 = Accelerometer self test
+	     Bit 1 = Magnetometer self test
+	     Bit 2 = Gyroscope self test
+	     Bit 3 = MCU self test
+
+	     0x0F = all good!
+	   */
+	status = HAL_I2C_Mem_Read(&bno_i2c, P_BNO055, ST_RESULT_ADDR, 1, &value, 1, 100);
+	if (status != HAL_OK) {
+	    printf("I2C Read Error: ST_RESULT_ADDR\n");
+	}
+	HAL_Delay(50);
+	result->STresult = value;
+	value=0;
+
+	  /* System Status (see section 4.3.58)
+	     0 = Idle
+	     1 = System Error
+	     2 = Initializing Peripherals
+	     3 = System Iniitalization
+	     4 = Executing Self-Test
+	     5 = Sensor fusio algorithm running
+	     6 = System running without fusion algorithms
+	   */
+	status = HAL_I2C_Mem_Read(&bno_i2c, P_BNO055, SYS_STATUS_ADDR, 1, &value, 1, 100);
+	if (status != HAL_OK) {
+	    printf("I2C Read Error: SYS_STATUS_ADDR\n");
+	}
+	HAL_Delay(50);
+	result->SYSStatus = value;
+	value=0;
+	  /* System Error (see section 4.3.59)
+	     0 = No error
+	     1 = Peripheral initialization error
+	     2 = System initialization error
+	     3 = Self test result failed
+	     4 = Register map value out of range
+	     5 = Register map address out of range
+	     6 = Register map write error
+	     7 = BNO low power mode not available for selected operation mode
+	     8 = Accelerometer power mode not available
+	     9 = Fusion algorithm configuration error
+	     A = Sensor configuration error
+	   */
+	status = HAL_I2C_Mem_Read(&bno_i2c, P_BNO055, SYS_ERR_ADDR, 1, &value, 1, 100);
+	if (status != HAL_OK) {
+	    printf("I2C Read Error: SYS_ERR_ADDR\n");
+	}
+	HAL_Delay(50);
+	result->SYSError = value;
+}
+
+/*!
+ *   @brief  Changes register page
+ *
+ *   @param  Page number
+ *   		Possible Arguments
+ * 			[PAGE_0
+ * 			 PAGE_1]
+ *
+ * 	 @retval None
+ */
 void SelectPage(uint8_t page){
 
-	if(HAL_I2C_Mem_Write(&hi2c1, P_BNO055, P_PAGE_ID, 1, &page, 1, HAL_MAX_DELAY) != HAL_OK){
-		printf("Register page could not be changed!\n");
+	if(HAL_I2C_Mem_Write(&bno_i2c, P_BNO055, PAGE_ID_ADDR, 1, &page, 1, 100) != HAL_OK){
+		printf("Register page replacement could not be set\n");
 	}
-	else{
-		printf("Register page replacement was successful.\n");
-	}
-	HAL_Delay(100);
+	HAL_Delay(50);
 }
 
-void AccelData(void){
+/**
+  * @brief  Software Reset to BNO055
+  *
+  * @param  None
+  *
+  * @retval None
+  */
+void ResetBNO055(void){
 
-	uint8_t ACCELDATA[6];
-	HAL_I2C_Mem_Read(&hi2c1, P_BNO055, P_ACCEL_DATA_X_LSB, 1, ACCELDATA, 6, HAL_MAX_DELAY);
+	uint8_t reset = 0x20;
+	HAL_I2C_Mem_Write(&bno_i2c, P_BNO055, SYS_TRIGGER_ADDR, 1, &reset, 1, 100);
+	HAL_Delay(500);
 
-	SensorData.accel.x = (int16_t)((ACCELDATA[1] << 8) | ACCELDATA[0]);
-	SensorData.accel.y = (int16_t)((ACCELDATA[3] << 8) | ACCELDATA[2]);
-	SensorData.accel.z = (int16_t)((ACCELDATA[5] << 8) | ACCELDATA[4]);
+	//Checking for is reset process done
+	uint8_t chip_id=0;
+	HAL_I2C_Mem_Read(&bno_i2c, P_BNO055, CHIP_ID_ADDR, 1, &chip_id, 1, 100);
 
-	Accel_x = (float)(SensorData.accel.x /100.0);
-	Accel_y = (float)(SensorData.accel.y /100.0);
-	Accel_z = (float)(SensorData.accel.z /100.0);
-
-	printf("Accelerometer Data:\n");
-	printf("Accel_X: %f\t",Accel_x);
-	printf("Accel_Y: %f\t",Accel_y);
-	printf("Accel_Z: %f\t\n",Accel_z);
-}
-
-void MagnetoData(void){
-
-	uint8_t MAGDATA[6];
-	HAL_I2C_Mem_Read(&hi2c1, P_BNO055, P_MAG_DATA_X_LSB, 1, MAGDATA, 6, HAL_MAX_DELAY);
-
-	SensorData.magneto.x = (int16_t)((MAGDATA[1] << 8) | MAGDATA[0]);
-	SensorData.magneto.y = (int16_t)((MAGDATA[3] << 8) | MAGDATA[2]);
-	SensorData.magneto.z = (int16_t)((MAGDATA[5] << 8) | MAGDATA[4]);
-
-	Magneto_x = (float)(SensorData.magneto.x /16.0);
-	Magneto_y = (float)(SensorData.magneto.y /16.0);
-	Magneto_z = (float)(SensorData.magneto.z /16.0);
-
-	printf("Magnetometer Data:\n");
-	printf("Magnet_X: %f\t",Magneto_x);
-	printf("Magnet_Y: %f\t",Magneto_y);
-	printf("Magnet_Z: %f\t\n",Magneto_z);
-}
-
-void GyroData(void){
-
-	uint8_t GYRODATA[6];
-	HAL_I2C_Mem_Read(&hi2c1, P_BNO055, P_GYRO_DATA_X_LSB, 1, GYRODATA, 6, HAL_MAX_DELAY);
-
-	SensorData.gyro.x = (int16_t)((GYRODATA[1] << 8) | GYRODATA[0]);
-	SensorData.gyro.y =(int16_t)((GYRODATA[3] << 8) | GYRODATA[2]);
-	SensorData.gyro.z = (int16_t)((GYRODATA[5] << 8) | GYRODATA[4]);
-
-	Gyro_x = (float)((SensorData.gyro.x) /16.0);
-	Gyro_y = (float)((SensorData.gyro.y) /16.0);
-	Gyro_z = (float)((SensorData.gyro.z) /16.0);
-
-	printf("Gyroscope Data:\n");
-	printf("Gyro_X: %f\t",Gyro_x);
-	printf("Gyro_Y: %f\t",Gyro_y);
-	printf("Gyro_Z: %f\t\n",Gyro_z);
-}
-
-void Euler_Angle(void){
-
-	uint8_t EULERDATA[6];
-	HAL_I2C_Mem_Read(&hi2c1, P_BNO055, P_EUL_HEADING_LSB, 1, EULERDATA, 6, HAL_MAX_DELAY);
-
-	SensorData.euler.x = (int16_t)(EULERDATA[0] | (EULERDATA[1] << 8));
-	SensorData.euler.y = (int16_t)(EULERDATA[2] | (EULERDATA[3] << 8));
-	SensorData.euler.z = (int16_t)(EULERDATA[4] | (EULERDATA[5] << 8));
-
-	Heading = (float)(SensorData.euler.x /16.0);
-	Roll    = (float)(SensorData.euler.y /16.0);
-	Pitch   = (float)(SensorData.euler.z /16.0);
-
-	printf("Euler Angles\n");
-	printf("Heading: %f\t",Heading);
-	printf("Roll: %f\t",Roll);
-	printf("Pitch: %f\t\n",Pitch);
-
-}
-
-void Lineer_Accel(void){
-
-	uint8_t LINEERDATA[6];
-	HAL_I2C_Mem_Read(&hi2c1, P_BNO055, P_LIA_DATA_X_LSB, 1, LINEERDATA, 6, HAL_MAX_DELAY);
-
-	SensorData.lineeracc.x = (int16_t)((LINEERDATA[1] << 8) | LINEERDATA[0]);
-	SensorData.lineeracc.y = (int16_t)((LINEERDATA[3] << 8) | LINEERDATA[2]);
-	SensorData.lineeracc.z = (int16_t)((LINEERDATA[5] << 8) | LINEERDATA[4]);
-
-	LinAcc_x = (float)(SensorData.lineeracc.x /100.0);
-	LinAcc_y = (float)(SensorData.lineeracc.y /100.0);
-	LinAcc_z = (float)(SensorData.lineeracc.z /100.0);
-
-	printf("Lineer Accel\n");
-	printf("LinAcc_X: %f\t",LinAcc_x);
-	printf("LinAcc_Y: %f\t",LinAcc_y);
-	printf("LinAcc_Z: %f\t\n",LinAcc_z);
-}
-
-void Gravity_Vector(void){
-
-	uint8_t GRAVITYDATA[6];
-	HAL_I2C_Mem_Read(&hi2c1, P_BNO055, P_GRV_DATA_X_LSB, 1, GRAVITYDATA, 6, HAL_MAX_DELAY);
-
-	SensorData.gravity.x = (int16_t)((GRAVITYDATA[1] << 8) | GRAVITYDATA[0]);
-	SensorData.gravity.y = (int16_t)((GRAVITYDATA[3] << 8) | GRAVITYDATA[2]);
-	SensorData.gravity.z = (int16_t)((GRAVITYDATA[5] << 8) | GRAVITYDATA[4]);
-
-	Gravity_x = (float)(SensorData.gravity.x /100.0);
-	Gravity_y = (float)(SensorData.gravity.y /100.0);
-	Gravity_z = (float)(SensorData.gravity.z /100.0);
-
-	printf("Gravity Vector\n");
-	printf("Gravity_X: %f\t",Gravity_x);
-	printf("Gravity_Y: %f\t",Gravity_y);
-	printf("Gravity_Z: %f\t\n",Gravity_z);
-}
-
-void Status_Calibrated(void){
-
-	SelectPage(Page_0);
-	int system,gyro,acc,mag;
-	uint8_t result;
-	HAL_I2C_Mem_Read(&hi2c1, P_BNO055, P_CALIB_STAT, 1, &result, 6, HAL_MAX_DELAY);
-
-	status.system_cal = (uint8_t)(result >> 6);
-	status.gyro_cal   = (uint8_t)((result >> 4)  & 0x3);
-	status.acc_cal    = (uint8_t)((result >> 2) & 0x3);
-	status.mag_cal    = (uint8_t)(result & 0x3);
-	system=status.system_cal;
-	gyro=status.gyro_cal;
-	acc=	status.acc_cal;
-	mag=status.mag_cal;
-	printf("Kalibrasyon Durumu\n");
-	printf("System: %d\t",system);
-	printf("Gyro: %d\t",gyro);
-	printf("Accel: %d\t",acc);
-	printf("Mag: %d\t\n",mag);
-
-}
-
-void Unit_Select(uint8_t ORI,uint8_t TEMP,uint8_t EUL,uint8_t GYRO, uint8_t ACC){
-
-	uint8_t unit = (ORI | TEMP | EUL | GYRO | ACC);
-	if(HAL_I2C_Mem_Write(&hi2c1, P_BNO055, P_UNIT_SEL, 1, &unit, sizeof(unit), HAL_MAX_DELAY) != HAL_OK){
-		printf("Unit could not be set!\n");
-	}
-	else{
-		printf("Unit setting successful.\n");
+	//If value of id register is not equal to BNO055 chip id which is 0xA0, wait until equal to each other
+	while(chip_id != BNO055_ID) {
+		printf("BNO055-> Undefined chip id\n");
+		HAL_Delay(500);
 	}
 }
 
-void Set_Operation_Mode(op_modes_t Mode){
+/*!
+ *   @brief  Reads various data measured by BNO055
+ *
+ *   @param  Register base address of the data to be read
+ * 			Possible arguments
+ * 			[SENSOR_ACCEL
+ *			 SENSOR_GYRO
+ * 			 SENSOR_MAG
+ *			 SENSOR_EULER
+ *			 SENSOR_LINACC
+ *			 SENSOR_GRAVITY
+ *			 SENSOR_QUATERNION]
+ *
+ *   @retval Structure containing the values ​​of the read data
+ */
+void ReadData(BNO055_Sensors_t *sensorData,BNO055_Sensor_Type sensors){
 
-	SelectPage(Page_0);
-	if(	HAL_I2C_Mem_Write(&hi2c1, P_BNO055, P_OPR_MODE, 1, &Mode, 1, HAL_MAX_DELAY) !=HAL_OK){
+
+	   uint8_t buffer[8];
+
+	    if (sensors & SENSOR_GRAVITY) {
+
+	    	HAL_I2C_Mem_Read(&bno_i2c, P_BNO055, BNO_GRAVITY, 1, buffer, 6, HAL_MAX_DELAY);
+	        sensorData->Gravity.X = (float)(((int16_t)((buffer[1] << 8) | buffer[0]))/100.0);
+	        sensorData->Gravity.Y = (float)(((int16_t)((buffer[3] << 8) | buffer[2]))/100.0);
+	        sensorData->Gravity.Z = (float)(((int16_t)((buffer[5] << 8) | buffer[4]))/100.0);
+	        memset(buffer, 0, sizeof(buffer));
+	    }
+
+	    if (sensors & SENSOR_QUATERNION) {
+
+	    	HAL_I2C_Mem_Read(&bno_i2c, P_BNO055, BNO_QUATERNION, 1, buffer, 8, HAL_MAX_DELAY);
+	        sensorData->Quaternion.W = (float)(((int16_t)((buffer[1] << 8) | buffer[0]))/(1<<14));
+	        sensorData->Quaternion.X = (float)(((int16_t)((buffer[3] << 8) | buffer[2]))/(1<<14));
+	        sensorData->Quaternion.Y = (float)(((int16_t)((buffer[5] << 8) | buffer[4]))/(1<<14));
+	        sensorData->Quaternion.Z = (float)(((int16_t)((buffer[7] << 8) | buffer[6]))/(1<<14));
+	        memset(buffer, 0, sizeof(buffer));
+	    }
+
+	    if (sensors & SENSOR_LINACC) {
+
+	    	HAL_I2C_Mem_Read(&bno_i2c, P_BNO055, BNO_LINACC, 1, buffer, 6, HAL_MAX_DELAY);
+	        sensorData->LineerAcc.X = (float)(((int16_t)((buffer[1] << 8) | buffer[0]))/100.0);
+	        sensorData->LineerAcc.Y = (float)(((int16_t)((buffer[3] << 8) | buffer[2]))/100.0);
+	        sensorData->LineerAcc.Z = (float)(((int16_t)((buffer[5] << 8) | buffer[4]))/100.0);
+	        memset(buffer, 0, sizeof(buffer));
+	    }
+
+	    if (sensors & SENSOR_GYRO) {
+
+	    	HAL_I2C_Mem_Read(&bno_i2c, P_BNO055, BNO_GYRO, 1, buffer, 6, HAL_MAX_DELAY);
+	        sensorData->Gyro.X = (float)(((int16_t) ((buffer[1] << 8) | buffer[0]))/16.0);
+	        sensorData->Gyro.Y = (float)(((int16_t) ((buffer[3] << 8) | buffer[2]))/16.0);
+	        sensorData->Gyro.Z = (float)(((int16_t) ((buffer[5] << 8) | buffer[4]))/16.0);
+	        memset(buffer, 0, sizeof(buffer));
+	    }
+	    if (sensors & SENSOR_ACCEL) {
+
+	    	HAL_I2C_Mem_Read(&bno_i2c, P_BNO055, BNO_ACCEL, 1, buffer, 6, HAL_MAX_DELAY);
+	        sensorData->Accel.X = (float)(((int16_t) ((buffer[1] << 8) | buffer[0]))/100.0);
+	        sensorData->Accel.Y = (float)(((int16_t) ((buffer[3] << 8) | buffer[2]))/100.0);
+	        sensorData->Accel.Z = (float)(((int16_t) ((buffer[5] << 8) | buffer[4]))/100.0);
+	        memset(buffer, 0, sizeof(buffer));
+	    }
+	    if (sensors & SENSOR_MAG) {
+
+	    	HAL_I2C_Mem_Read(&bno_i2c, P_BNO055, BNO_MAG, 1, buffer, 6, HAL_MAX_DELAY);
+	        sensorData->Magneto.X = (float)(((int16_t) ((buffer[1] << 8) | buffer[0]))/16.0);
+	        sensorData->Magneto.Y = (float)(((int16_t) ((buffer[3] << 8) | buffer[2]))/16.0);
+	        sensorData->Magneto.Z = (float)(((int16_t) ((buffer[5] << 8) | buffer[4]))/16.0);
+	        memset(buffer, 0, sizeof(buffer));
+	    }
+	    if (sensors & SENSOR_EULER) {
+
+	    	HAL_I2C_Mem_Read(&bno_i2c, P_BNO055, BNO_EULER, 1, buffer, 6, HAL_MAX_DELAY);
+	        sensorData->Euler.X = (float)(((int16_t) ((buffer[1] << 8) | buffer[0]))/16.0);
+	        sensorData->Euler.Y = (float)(((int16_t) ((buffer[3] << 8) | buffer[2]))/16.0);
+	        sensorData->Euler.Z = (float)(((int16_t) ((buffer[5] << 8) | buffer[4]))/16.0);
+	        memset(buffer, 0, sizeof(buffer));
+	    }
+}
+
+/*!
+ *  @brief  Puts the chip in the specified operating mode
+ *  @param  Operation modes
+ *          Mode Values;
+ *           [CONFIG_MODE
+ *            ACC_ONLY
+ *            MAG_ONLY
+ *            GYR_ONLY
+ *            ACC_MAG
+ *            ACC_GYRO
+ *            MAG_GYRO
+ *            AMG
+ *            IMU
+ *            COMPASS
+ *            M4G
+ *            NDOF_FMC_OFF
+ *            NDOF]
+ *
+ *  @retval None
+ */
+void Set_Operation_Mode(Op_Modes_t Mode){
+
+	SelectPage(PAGE_0);
+	if(	HAL_I2C_Mem_Write(&bno_i2c, P_BNO055, OPR_MODE_ADDR, 1, &Mode, 1, 100) !=HAL_OK){
 		printf("Operation mode could not be set!\n");
 	}
 	else printf("Operation mode switching succeeded.\n");
@@ -187,23 +233,19 @@ void Set_Operation_Mode(op_modes_t Mode){
 
 }
 
-bool check_id(void){
-	uint8_t id;
-	HAL_I2C_Mem_Read(&hi2c1, P_BNO055, P_CHIP_ID, 1, &id, sizeof(id), HAL_MAX_DELAY);
+/*!
+ *  @brief  Set the power mode of BNO055
+ *  @param  power modes
+ *          possible values
+ *           [BNO055_NORMAL_MODE
+ *            BNO055_LOWPOWER_MODE
+ *            BNO055_SUSPEND_MODE]
+ *
+ *  @retval None
+ */
+void SetPowerMODE(uint8_t BNO055_){
 
-	if(id == BNO055_ID){
-		return true;
-	}
-	else{
-		return false;
-	}
-}
-
-
-void SetPowerTo_NORMAL(void){
-
-	uint8_t power_normal = 0x00; // Low power mode 0x1 and Suspend mode 0x2
-	if(	HAL_I2C_Mem_Write(&hi2c1, P_BNO055, P_PWR_MODE, 1, &power_normal, 1, HAL_MAX_DELAY) != HAL_OK)
+	if(	HAL_I2C_Mem_Write(&bno_i2c, P_BNO055, PWR_MODE_ADDR, 1, &BNO055_, 1, 100) != HAL_OK)
 	{
 		printf("Power mode could not be set!\n");
 	}
@@ -215,81 +257,313 @@ void SetPowerTo_NORMAL(void){
 
 }
 
-void External_Crystal(bool use) {
+/*!
+ *  @brief  Selects the chip's clock source
+ *  @param  Source
+ *          possible values
+ *           [CLOCK_EXTERNAL
+ *            CLOCK_INTERNAL]
+ *
+ *  @retval None
+ */
+void Clock_Source(uint8_t source) {
 
-	if(use){
-		uint8_t data = 0x80; //First bit: External Crystal=1; Internal Crystal=0
-		HAL_I2C_Mem_Write(&hi2c1, P_BNO055, P_SYS_TRIGGER, 1, &data, sizeof(data), HAL_MAX_DELAY);
-	}
-	else{
-		uint8_t data = 0x00;
-		HAL_I2C_Mem_Write(&hi2c1, P_BNO055, P_SYS_TRIGGER, 1, &data, sizeof(data), HAL_MAX_DELAY);
-	}
+	//7th bit: External Crystal=1; Internal Crystal=0
+	HAL_I2C_Mem_Write(&bno_i2c, P_BNO055, SYS_TRIGGER_ADDR, 1, &source, sizeof(source), 100);
 }
 
-void BNO055_Remap_Axis(axis_position_t position){
+/*!
+ *  @brief  Changes the chip's axis signs and remap
+ *  @param  remapcode and signcode
+ *         	Default Parameters:[DEFAULT_AXIS_REMAP(0x24), DEFAULT_AXIS_SIGN(0x00)]
+ *
+ *  @retval None
+ */
+void BNO055_Axis(uint8_t remap, uint8_t sign){
 
-	switch (position) {
-			case P0:
-				BNO055_Axis(0x21,0x04);
-				break;
-			case P1:
-				BNO055_Axis(0x21,0x04);
-				break;
-			case P2:
-				BNO055_Axis(0x21,0x04);
-				break;
-			case P3:
-				BNO055_Axis(0x21,0x04);
-				break;
-			case P4:
-				BNO055_Axis(0x21,0x04);
-				break;
-			case P5:
-				BNO055_Axis(0x21,0x04);
-				break;
-			case P6:
-				BNO055_Axis(0x21,0x04);
-				break;
-			case P7:
-				BNO055_Axis(0x21,0x04);
-				break;
-		}
-}
-
-void BNO055_Axis(uint8_t config, uint8_t sign){
-
-	HAL_I2C_Mem_Write(&hi2c1,P_BNO055, P_AXIS_MAP_CONFIG, 1, &config, 1, HAL_MAX_DELAY);
+	HAL_I2C_Mem_Write(&bno_i2c,P_BNO055, AXIS_MAP_CONFIG_ADDR, 1, &remap, 1, 100);
 	HAL_Delay(20);
-	HAL_I2C_Mem_Write(&hi2c1, P_BNO055, P_AXIS_MAP_SIGN, 1, &sign, 1, HAL_MAX_DELAY);
+	HAL_I2C_Mem_Write(&bno_i2c, P_BNO055, AXIS_MAP_SIGN_ADDR, 1, &sign, 1, 100);
 	HAL_Delay(100);
 }
 
-void SET_Accel_Range(accel_range_t range){
-	SelectPage(Page_1);
-	HAL_I2C_Mem_Write(&hi2c1, P_BNO055, P_ACC_CONFIG, 1, &range, 1, HAL_MAX_DELAY);
+/*!
+ *  @brief  Sets the accelerometer range
+ *  @param  range
+ *          possible values
+ *           [Range_2G
+ *            Range_4G
+ *            Range_8G
+ *            Range_16G]
+ *
+ *  @retval None
+ */
+void SET_Accel_Range(uint8_t range){
+
+	HAL_I2C_Mem_Write(&bno_i2c, P_BNO055, ACC_CONFIG_ADDR, 1, &range, 1, 100);
 	HAL_Delay(100);
-	SelectPage(Page_0);
 
 }
 
-void BNO055_Init(void){
+/**
+  * @brief  Initialization of BNO055
+  *
+  * @param  Init argument to a BNO055_Init_t structure that contains
+  *         the configuration information for the BNO055 device.
+  *
+  * @retval None
+  */
+void BNO055_Init(BNO055_Init_t Init){
 
-	SelectPage(Page_0);
+	//Set operation mode to config_mode for initialize all register
 	Set_Operation_Mode(CONFIG_MODE);
+	HAL_Delay(50);
+	/*
+	 * Set register page number to 1
+	 * Configure Accelerometer range
+	 */
+	SelectPage(PAGE_1);
+	SET_Accel_Range(Init.ACC_Range);
+	HAL_Delay(50);
 
-	uint8_t reset = 0x20;
-	HAL_I2C_Mem_Write(&hi2c1, P_BNO055, P_SYS_TRIGGER, 1, &reset, sizeof(reset), HAL_MAX_DELAY);
+	//Set register page number to 0
+	SelectPage(PAGE_0);
+	HAL_Delay(50);
 
+	//Read clock status. If status=0 then it is free to configure the clock source
+	uint8_t status;
+	HAL_I2C_Mem_Read(&bno_i2c, P_BNO055, SYS_CLK_STATUS_ADDR, 1, &status, 1, 100);
+	HAL_Delay(50);
+	//Checking if the status bit is 0
+	if(status == 0)
+	{
+		//Changing clock source
+		Clock_Source(Init.Clock_Source);
+		HAL_Delay(100);
+	}
+
+	//Configure axis remapping and signing
+	BNO055_Axis(Init.Axis, Init.Axis_sign);
 	HAL_Delay(100);
 
-	SetPowerTo_NORMAL();
+	//Configure data output format and the measurement unit
+	HAL_I2C_Mem_Write(&bno_i2c, P_BNO055, UNIT_SEL_ADDR, 1, &Init.Unit_Sel, sizeof(Init.Unit_Sel), 100);
 	HAL_Delay(100);
 
-	External_Crystal(true);
+	//Set power mode
+	SetPowerMODE(Init.Mode);
 	HAL_Delay(100);
 
-	Unit_Select(WINDOWS, TEMP_CELCIUS, EUL_DEG, GYRO_DPS, ACC_MS2);
+	//Set operation mode
+	Set_Operation_Mode(Init.OP_Modes);
 	HAL_Delay(100);
+
+	printf("BNO055 Initialization process is done!\n");
 }
 
+/**
+  * @brief  Gets calibration status of accel, gyro, mag and system
+  *
+  * @param  None
+  *
+  * @retval Calib_status_t structure that contains
+  *         the calibration status of accel, gyro, mag and system.
+  */
+void getCalibration(Calib_status_t *calib) {
+    uint8_t calData;
+
+    // Read calibration status register using I2C
+    HAL_StatusTypeDef status = HAL_I2C_Mem_Read(&hi2c2, P_BNO055, CALIB_STAT_ADDR, 1, &calData, 1, HAL_MAX_DELAY);
+
+    // Check if read was successful
+    if (status == HAL_OK) {
+
+        // Extract calibration status values
+
+        	calib->System= (calData >> 6) & 0x03;
+
+
+        	calib->Gyro = (calData >> 4) & 0x03;
+
+
+        	calib->Acc = (calData >> 2) & 0x03;
+
+
+        	calib->MAG = calData & 0x03;
+
+    } else {
+        printf("Failed to read calibration status register.\n");
+    }
+}
+
+/**
+  * @brief  Gets sensor offsets
+  *
+  * @param  22 byte long buffer to hold offset data
+  *
+  * @retval None
+  *
+  */
+void getSensorOffsets(uint8_t *calibData) {
+
+        // Save the current mode
+        uint8_t lastMode = getCurrentMode();
+
+        // Switch to CONFIG mode
+        Set_Operation_Mode(CONFIG_MODE);
+        printf("Switched to CONFIG mode.\n");
+
+        // Read the offset registers
+        HAL_I2C_Mem_Read(&bno_i2c, P_BNO055, ACC_OFFSET_X_LSB_ADDR, 1, calibData, 22, 100);
+        printf("Calibration data obtained.\n");
+
+        // Restore the previous mode
+        Set_Operation_Mode(lastMode);
+        printf("Restored to previous mode.\n");
+}
+
+/**
+  * @brief  Sets sensor offsets
+  *
+  * @param  22 byte long buffer containing offset data
+  *
+  * @retval None
+  *
+  */
+void setSensorOffsets(const uint8_t *calibData) {
+    uint8_t lastMode = getCurrentMode();
+
+    // Switch to CONFIG mode
+    Set_Operation_Mode(CONFIG_MODE);
+    printf("Switched to CONFIG mode.\n");
+
+    // Write calibration data to the sensor's offset registers using memory write
+    HAL_I2C_Mem_Write(&bno_i2c, P_BNO055, ACC_OFFSET_X_LSB_ADDR, 1, (uint8_t *)calibData, 22, 100);
+    printf("Wrote calibration data to sensor's offset registers.\n");
+
+    // Restore the previous mode
+    Set_Operation_Mode(lastMode);
+    printf("Restored to previous mode.\n");
+}
+
+/**
+  * @brief  Checks the calibration status of the sensor
+  *
+  * @param  None
+  *
+  * @retval True of False
+  *
+  */
+bool isFullyCalibrated(void) {
+//    Calib_status_t calib ={0};
+    Calib_status_t calib ={0};
+    getCalibration(&calib);
+
+
+    switch (getCurrentMode()) {
+        case ACC_ONLY:
+            return (calib.Acc == 3);
+        case MAG_ONLY:
+            return (calib.MAG == 3);
+        case GYRO_ONLY:
+        case M4G: /* No magnetometer calibration required. */
+            return (calib.Gyro == 3);
+        case ACC_MAG:
+        case COMPASS:
+            return (calib.Acc == 3 && calib.MAG == 3);
+        case ACC_GYRO:
+        case IMU:
+            return (calib.Acc == 3 && calib.Gyro == 3);
+        case MAG_GYRO:
+            return (calib.MAG == 3 && calib.Gyro == 3);
+        default:
+            return (calib.System == 3 && calib.Gyro == 3 && calib.Acc == 3 && calib.MAG == 3);
+    }
+}
+
+/**
+  * @brief  Gets the current operating mode of the chip
+  *
+  * @param  None
+  *
+  * @retval Operating mode
+  *
+  */
+Op_Modes_t getCurrentMode(void) {
+
+	Op_Modes_t mode;
+
+	HAL_I2C_Mem_Read(&bno_i2c, P_BNO055, OPR_MODE_ADDR, 1, &mode, 1, 100);
+
+    return mode;
+}
+
+/**
+  * @brief  Calibrates BNO055
+  *
+  * @param  None
+  *
+  * @retval None
+  *
+  */
+bool Calibrate_BNO055(void) {
+
+		Calib_status_t calib={0};
+        printf("Calibrating BNO055 sensor...\n");
+
+        // Set operation mode to FUSION_MODE or appropriate mode for calibration
+        Set_Operation_Mode(NDOF);
+    	HAL_Delay(100);
+        // Gyroscope calibration
+        printf("Calibrating gyroscope...\n");
+        printf("Place the device in a single stable position\n");
+        HAL_Delay(1000);  // Simulated gyroscope calibration time
+
+        do {
+            getCalibration(&calib);
+        	HAL_Delay(500);
+		} while (calib.Gyro !=3);
+        printf("Gyroscope calibration complete.\n");
+
+        // Accelerometer calibration
+        printf("Calibrating accelerometer...\n");
+        printf("Place the device in 6 different stable positions\n");
+        for (int i = 0; i < 6; i++) {
+            printf("Position %d\n", i + 1);
+            HAL_Delay(1500);  // Simulated accelerometer calibration time
+        }
+
+        do {
+            getCalibration(&calib);
+        	HAL_Delay(500);
+		} while (calib.Acc !=3);
+        printf("Accelerometer calibration complete.\n");
+
+        // Magnetometer calibration
+        printf("Calibrating magnetometer...\n");
+        printf("Make some random movements\n");
+        HAL_Delay(1000);  // Simulated gyroscope calibration time
+
+        do {
+            getCalibration(&calib);
+        	HAL_Delay(500);
+		} while (calib.MAG !=3);
+        printf("Magnetometer calibration complete.\n");
+
+        // System calibration
+        printf("Calibrating system...\n");
+        printf("Keep the device stationary until system calibration reaches level 3\n");
+        do {
+            getCalibration(&calib);
+        	HAL_Delay(500);
+		} while (calib.System !=3);
+        HAL_Delay(500);
+
+        // Check calibration status
+        while(!isFullyCalibrated()) HAL_Delay(500);
+        printf("Sensor is fully calibrated.\n");
+
+        printf("System: %d      Gyro: %d       Accel: %d       MAG: %d\n",calib.System,calib.Gyro , calib.Acc, calib.MAG);
+        if(isFullyCalibrated()) return true;
+        else return false;
+}
